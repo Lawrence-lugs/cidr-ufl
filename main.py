@@ -20,9 +20,13 @@ test_loader = DataLoader(test_data,batch_size,num_workers=n_workers)
 from tensorboardX import SummaryWriter
 writer = SummaryWriter()
 
-def sup_train(model,epochs,resumefrom=0,checkpoint=None):    
+def sup_train(model,epochs,resumefrom=0,checkpoint=None,opt='adam'):    
     
-    optimizer = torch.optim.Adam(model.parameters(),lr=0.001)
+    if opt=='adam':
+        optimizer = torch.optim.Adam(model.parameters(),lr=0.001)
+    if opt=='sgd':
+        optimizer = torch.optim.SGD(net.parameters(), lr=0.002, momentum=0.9, weight_decay=1e-4)
+    
     criterion = torch.nn.CrossEntropyLoss()
     #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=60, gamma=0.1)
 
@@ -78,8 +82,10 @@ def get_parser():
 if __name__ == '__main__':
 
     resume = False
+
+    torch.set_seed = 0
     
-    mbv2 = cidr_models.CIDR_MobileNetv2()
+    mbv2 = cidr_models.CIDR_MobileNetv2(width_mult=0.5)
 
     epoch = 0
     checkpoint=None
@@ -92,7 +98,7 @@ if __name__ == '__main__':
     net = mbv2.to(device)
 
     print('Starting...')
-    sup_train(net,200,resumefrom=epoch,checkpoint=checkpoint)
+    sup_train(net,200,resumefrom=epoch,checkpoint=checkpoint,opt='sgd')
 
     breakpoint()
 
