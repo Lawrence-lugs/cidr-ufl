@@ -85,7 +85,7 @@ if __name__ == '__main__':
 
     torch.set_seed = 0
     
-    mbv2 = cidr_models.CIDR_MobileNetv2(width_mult=0.5)
+    mbv2 = cidr_models.KL_MBV2()
 
     epoch = 0
     checkpoint=None
