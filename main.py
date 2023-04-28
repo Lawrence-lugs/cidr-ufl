@@ -7,18 +7,39 @@ import argparse
 
 device = torch.device('cuda' if torch.cuda.is_available else 'cpu')
 
-ToTensor = transforms.ToTensor()
+print("Preparing data...")
 
-train_data = datasets.CIFAR10(root='data', train=True, download=True, transform=ToTensor)
-test_data = datasets.CIFAR10(root="data", train=False, download=True, transform=ToTensor)
+config = {
+    'runname': 'mbv2_kl_two2stride_relu6',
+    'resume' : True,
+    'model' : cidr_models.KL_MBV2()
+}
 
-n_workers = 0
+
+# Data augments
+transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+])
+
+transform_test = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+])
+
+
+train_data = datasets.CIFAR10(root='data', train=True, download=True, transform=transform_train)
+test_data = datasets.CIFAR10(root="data", train=False, download=True, transform=transform_test)
+
+n_workers = 2
 batch_size = 16
 train_loader = DataLoader(train_data,batch_size=batch_size,num_workers=n_workers)
 test_loader = DataLoader(test_data,batch_size,num_workers=n_workers)
 
 from tensorboardX import SummaryWriter
-writer = SummaryWriter()
+writer = SummaryWriter(f'runs/{config["runname"]}')
 
 def sup_train(model,epochs,resumefrom=0,checkpoint=None,opt='adam'):    
     
@@ -28,7 +49,7 @@ def sup_train(model,epochs,resumefrom=0,checkpoint=None,opt='adam'):
         optimizer = torch.optim.SGD(net.parameters(), lr=0.002, momentum=0.9, weight_decay=1e-4)
     
     criterion = torch.nn.CrossEntropyLoss()
-    #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=60, gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
 
     if resumefrom != 0:
         optimizer.load_state_dict(checkpoint['opt'])
@@ -37,6 +58,7 @@ def sup_train(model,epochs,resumefrom=0,checkpoint=None,opt='adam'):
     for epoch in range( epochs - resumefrom ):
 
         score = 0
+        runloss = 0
         model.train()
         for inputs,labels in train_loader:
             model.train()
@@ -46,6 +68,7 @@ def sup_train(model,epochs,resumefrom=0,checkpoint=None,opt='adam'):
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs,labels)
+            runloss += loss
 
             _, preds = torch.max(outputs,1)
             score += torch.sum(preds == labels.data)
@@ -59,6 +82,7 @@ def sup_train(model,epochs,resumefrom=0,checkpoint=None,opt='adam'):
             accu = sup_test(model)
             epoch = epoch + resumefrom 
         print(f'epoch {epoch}: {accu}')
+        writer.add_scalar('data/loss',runloss,epoch)
         writer.add_scalar('data/accu',accu,epoch)
         writer.add_scalar('data/trainacc',score/len(train_data),epoch)
         cidr_utils.save_progress('lastrun',epoch,model.state_dict(),optimizer.state_dict())
@@ -81,17 +105,15 @@ def get_parser():
 
 if __name__ == '__main__':
 
-    resume = False
-
     torch.set_seed = 0
     
-    mbv2 = cidr_models.KL_MBV2()
+    mbv2 = config["model"]
 
     epoch = 0
     checkpoint=None
-    if resume == True:
+    if config["resume"] == True:
         print("Resuming from old checkpoint...")
-        checkpoint = torch.load('saved_runs/lastrun')
+        checkpoint = torch.load(f'saved_runs/{config["runname"]}')
         mbv2.load_state_dict(checkpoint['model'])
         epoch = checkpoint['epoch']
 

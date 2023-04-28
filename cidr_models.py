@@ -1,4 +1,6 @@
 from torch import nn
+from torch.ao.quantization import QuantStub, DeQuantStub
+import torch
 
 class ConvBNRelu6( nn.Sequential ):
     """
@@ -75,8 +77,8 @@ class CIDR_MobileNetv2( nn.Module ):
             # t, c, n, stride
             [1, 16, 1, 1],
             [6, 24, 2, 1],
-            [6, 32, 3, 1],
-            [6, 64, 4, 1],
+            [6, 32, 3, 2],
+            [6, 64, 4, 2],
             [6, 96, 3, 1],
             [6, 160, 3, 2],
             [6, 320, 1, 1],
@@ -146,23 +148,24 @@ class Bottleneck_Block(nn.Module):
                 nn.BatchNorm2d(out_planes),
             )
 
+        self.skip_add = nn.quantized.FloatFunctional()
+
     def forward(self, x):
         y = self.relu1(self.bn1(self.conv1(x)))
         y = self.relu2(self.bn2(self.conv2(y)))
         y = self.bn3(self.conv3(y))
         if self.stride==1:
-            return y + self.shortcut(x) 
+            return self.skip_add.add(y,self.shortcut(x)) 
         else:
             return y
-
 
 class KL_MBV2(nn.Module):
 
     cfg = [
             # t, c, n, stride
-            [1, 16, 1, 1],
-            [6, 24, 2, 1],
-            [6, 32, 3, 2],
+            [1, 16, 1, 1], 
+            [6, 24, 2, 1], #s=2
+            [6, 32, 3, 1], #s=2
             [6, 64, 4, 2],
             [6, 96, 3, 1],
             [6, 160, 3, 2],
@@ -173,9 +176,10 @@ class KL_MBV2(nn.Module):
         super(KL_MBV2, self).__init__()
 
         self.features = nn.Sequential(
-            ConvBNRelu(3,32,3,1,1),
+            ConvBNRelu6(3,32,3,1,1),
             self._make_layers(in_planes=32),
-            ConvBNRelu(320,1280,1,1),
+            ConvBNRelu6(320,1280,1,1),
+            # this is the other main difference, this averagepool after the network.
             nn.AvgPool2d(4)
         )
 
@@ -192,6 +196,65 @@ class KL_MBV2(nn.Module):
     
     def forward(self, x):
         x = self.features(x)
-        x = x.view(x.size(0),-1)
+        #x = x.view(x.size(0),-1)
+        x = x.mean(-1).mean(-1)
         x = self.classifier(x)
         return x
+
+
+class KL_MBV2_Q(nn.Module):
+
+    cfg = [
+            # t, c, n, stride
+            [1, 16, 1, 1], 
+            [6, 24, 2, 1], #s=2
+            [6, 32, 3, 1], #s=2
+            [6, 64, 4, 2],
+            [6, 96, 3, 1],
+            [6, 160, 3, 2],
+            [6, 320, 1, 1],
+        ]
+
+    def __init__(self,num_classes=10):
+        super(KL_MBV2_Q, self).__init__()
+
+        self.features = nn.Sequential(
+            ConvBNRelu(3,32,3,1,1),
+            self._make_layers(in_planes=32),
+            ConvBNRelu(320,1280,1,1),
+            # this is the other main difference, this averagepool after the network.
+            nn.AvgPool2d(4)
+        )
+
+        self.quant = QuantStub()
+        self.dequant = DeQuantStub()
+
+        # third difference: no dropout layer
+        self.classifier = nn.Linear(1280,num_classes)
+
+    def _make_layers(self, in_planes):
+        layers = []
+        for expansion,out_planes,num_blocks,stride in self.cfg:
+            stride = [stride] + [1]*(num_blocks-1)
+            for stride in stride:
+                layers.append(Bottleneck_Block(in_planes,out_planes,expansion,stride))
+                in_planes = out_planes
+        return nn.Sequential(*layers)
+    
+    def forward(self, x):
+        x = self.quant(x)
+        x = self.features(x)
+        #x = x.view(x.size(0),-1)
+        x = x.mean(-1).mean(-1)
+        x = self.classifier(x)
+        x = self.dequant(x)
+        return x
+
+    def fuse_model(self):
+        for m in self.modules():
+            if type(m) == ConvBNRelu:
+                torch.ao.quantization.fuse_modules(m, ['0', '1', '2'], inplace=True)
+            # if type(m) == Bottleneck_Block:
+            #     for idx in range(len(m.conv)):
+            #         if type(m.conv[idx]) == nn.Conv2d:
+            #             torch.ao.quantization.fuse_modules(m.conv, [str(idx), str(idx + 1)], inplace=True)
