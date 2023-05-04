@@ -183,7 +183,10 @@ class KL_MBV2(nn.Module):
             nn.AvgPool2d(4)
         )
 
-        self.classifier = nn.Linear(1280,num_classes)
+        self.classifier = nn.Sequential(
+            nn.Dropout(0.2),
+            nn.Linear(1280,num_classes)
+        )
 
     def _make_layers(self, in_planes):
         layers = []
@@ -200,7 +203,6 @@ class KL_MBV2(nn.Module):
         x = x.mean(-1).mean(-1)
         x = self.classifier(x)
         return x
-
 
 class KL_MBV2_Q(nn.Module):
 
