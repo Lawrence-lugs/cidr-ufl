@@ -10,7 +10,7 @@ device = torch.device('cpu')
 
 myModel = load_model('jitted_runs/mbv2_kl_two2stride_relu6').to('cpu')
 myModel.eval()
-myModel.fuse_model()
+#myModel.fuse_model()
 
 myModel.qconfig = torch.ao.quantization.default_qconfig
 print(myModel.qconfig)

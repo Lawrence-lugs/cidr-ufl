@@ -3,6 +3,9 @@ import cidr_models
 import os
 from torchvision import transforms
 
+def count_params(model):
+    return sum(p.numel() for p in model.parameters())
+
 def save_progress(filename,epoch,model_state,optimizer_state):
     '''
     Saves the training progress of a model in training.

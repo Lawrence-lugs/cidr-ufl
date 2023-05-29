@@ -1,6 +1,5 @@
 import cidr_models
-from train import *
-from cidr_utils import *
+import cidr_utils
 import torch
 import torchvision
 
@@ -23,16 +22,67 @@ class dp_model():
 
         self.criterion = torch.nn.CrossEntropyLoss()
         self.scheduler = None
-        self.learning_epochs = 200
-        self.load_dataset(torchvision.datasets.CIFAR10)
+        
+        self.train_set = torchvision.datasets.CIFAR10(
+            root='data',
+            train=True,
+            download=False,
+            transform=cidr_utils.t_cropflip_augment
+        )
+        self.test_set = torchvision.datasets.CIFAR10(
+            root='data',
+            train=True,
+            download=False,
+            transform=cidr_utils.t_normalize
+        )
+        self.load_loaders()
+        
+        self.learning_epochs = 150
         self.epoch = 0
         self.accuracy = 0
-        
         
         # For the tensorboard writer
         self.tb_writer = None
 
-    def train(self):
+    def quantize(self):
+        ''' 
+        Post-training static quantization on the loaded model
+        To use this, your model must have the "quantized" attribute
+        and a "PTQ_prepare" method.
+        Setting this attribute to true should turn the model into its quantization
+        compatible mode.
+        '''
+        old_model = self.model
+        
+        print('Device has been set to CPU for quantized inference.')
+        self.device = torch.device('cpu')
+
+        try:
+            self.model.to(self.device)
+            self.model.eval()
+            self.model.PTQ_prepare()
+
+            # this attribute does not originally exist
+            self.model.qconfig = torch.ao.quantization.default_qconfig
+            
+            # insert the observers
+            torch.ao.quantization.prepare(self.model, inplace=True)
+
+            # show the observers the fmap distributions
+            num_calibration_batches = 32
+            self.test(num_calibration_batches)
+
+            torch.ao.quantization.convert(self.model, inplace=True)
+        except Exception as e:
+            self.device = torch.device('cuda')
+            self.model = old_model.to(device)
+            print(f'Model could not be quantized: {e}')
+
+    def load_params(self,path):
+        print(f'Loading parameters from {path}...')
+        self.model.load_state_dict(torch.load(path))
+
+    def sup_train(self):
         print(f'Starting training using device {device}...')
         while self.epoch < self.learning_epochs:
             model = self.model
@@ -54,20 +104,20 @@ class dp_model():
 
                 loss.backward()
                 self.optimizer.step()
-            
             with torch.no_grad():
                 self.accuracy = self.test(self.model)
-            print(f'epoch {self.epoch}:\t{self.accuracy}')
+                trainacc = epochscore/len(self.train_set)
+            print(f'epoch {self.epoch}:\ttestacc:{self.accuracy}\ttrainacc:{trainacc}\tloss:{loss}')
             
             if self.tb_writer is not None:
                 self.tb_writer.add_scalar('data/loss',runloss,self.epoch)
                 self.tb_writer.add_scalar('data/testacc',self.accuracy,self.epoch)
-                self.tb_writer.add_scalar('data/trainacc',epochscore/len(self.train_set),self.epoch)
+                self.tb_writer.add_scalar('data/trainacc',trainacc,self.epoch)
 
             self.epoch+=1
 
-
-    def test(self,num_batches = None):        
+    def test(self,num_batches = None):       
+        ''' Tests the accuracy of the dp model on testset ''' 
         model = self.model.to(self.device)
         if num_batches is None:
             num_batches = len(self.test_loader)
@@ -81,28 +131,16 @@ class dp_model():
         self.accuracy = total_correct/len(self.test_set)
         return self.accuracy
 
-    def load_dataset(self,datasetfunction: torch.utils.data.dataset):
-        self.train_set = datasetfunction(
-            root='data',
-            train=True,
-            download=False,
-            transform=cidr_utils.t_cropflip_augment
-        )
-        self.test_set = datasetfunction(
-            root='data',
-            train=True,
-            download=False,
-            transform=cidr_utils.t_normalize
-        )
+    def load_loaders(self):
         self.train_loader = torch.utils.data.DataLoader(
             self.train_set,
             batch_size=16,
-            num_workers=0
+            num_workers=2
         )
         self.test_loader = torch.utils.data.DataLoader(
             self.test_set,
             batch_size=16,
-            num_workers=0
+            num_workers=2
         )
 
 class dl_node():
