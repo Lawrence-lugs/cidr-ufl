@@ -47,3 +47,7 @@ An example of using the framework to run model training on visual wakewords in p
 To change the training environment and hyperparameters, the `optimizer, criterion, scheduler, learning_epochs` attributes of the `dp_model` object can be replaced, as per their Pytorch values.
 
 To change the dataset, simply (1) replace the `train_set` and `test_set` attributes of `dp_model` with your desired Pytorch dataset object (must be of type TorchDataset) and (2) run `dp_model.load_loaders()`
+
+## Federated Learning
+
+Make sure to delete everything inside node_states for every new simulation

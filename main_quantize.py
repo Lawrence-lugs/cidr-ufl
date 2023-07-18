@@ -1,4 +1,6 @@
 
+#%%
+
 import cidr_models, cidr_utils
 import torch
 from torchvision import datasets, transforms
@@ -9,8 +11,8 @@ def load_vww(dpmodel):
     import pyvww
     print("Loading visual wakewords as the dataset...")
     dpmodel.train_set = pyvww.pytorch.VisualWakeWordsClassification(
-        root='/home/raimarc/lawrence-workspace/MSCOCO/all2014',
-        annFile='/home/raimarc/lawrence-workspace/visualwakewords/annotations/instances_train.json',
+        root='/home/raimarc/lawrence-workspace/data/MSCOCO/all2014',
+        annFile='/home/raimarc/lawrence-workspace/data/visualwakewords/annotations/instances_train.json',
         transform = transforms.Compose([
             transforms.Resize((96,96)),
             transforms.RandomCrop(96,padding=12),
@@ -20,8 +22,8 @@ def load_vww(dpmodel):
         ])
     )
     dpmodel.test_set = pyvww.pytorch.VisualWakeWordsClassification(
-        root='/home/raimarc/lawrence-workspace/MSCOCO/all2014',
-        annFile='/home/raimarc/lawrence-workspace/visualwakewords/annotations/instances_val.json',
+        root='/home/raimarc/lawrence-workspace/data/MSCOCO/val2014',
+        annFile='/home/raimarc/lawrence-workspace/data/visualwakewords/annotations/instances_val.json',
         transform = transforms.Compose([
             transforms.Resize((96,96)),
             transforms.ToTensor(),

@@ -2,6 +2,17 @@ import cidr_models
 import cidr_utils
 import torch
 import torchvision
+import flwr as fl
+from typing import List, OrderedDict
+import numpy as np
+import mobilenetv2
+import pickle
+
+device = torch.device('cuda')
+
+# Setup tensorboard
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter(f'federated_runs/fl_test_run_3')
 
 class dp_model():
     '''
@@ -12,10 +23,16 @@ class dp_model():
         # Just for simulations
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        self.model = cidr_models.KL_MBV2().to(self.device) # TO CHANGE INTO MORE OFFICIAL MBV2 SO THAT IT CAN BE PRETRAINED
+        # self.model = mobilenetv2.MobileNetV2(
+        #     num_classes = 10,
+        #     width_mult = 1
+        #     ).to(self.device)
+
+        self.model = cidr_models.KL_MBV2().to(self.device)
+
         self.optimizer = torch.optim.SGD(
             self.model.parameters(),
-            lr=0.02,
+            lr=0.002,
             momentum=0.9,
             weight_decay=1e-4
         )
@@ -40,9 +57,15 @@ class dp_model():
         self.learning_epochs = 150
         self.epoch = 0
         self.accuracy = 0
+
+        self.global_epoch = 0
         
-        # For the tensorboard writer
+        self.name = 'default_name'
         self.tb_writer = None
+        # For the tensorboard writer
+        #from torch.utils.tensorboard import SummaryWriter
+        #self.tensorboard_log_name = 'runs/dlf_flower_integration'
+        #self.tb_writer = SummaryWriter(self.tensorboard_log_name)
 
     def quantize(self):
         ''' 
@@ -107,14 +130,15 @@ class dp_model():
             with torch.no_grad():
                 self.accuracy = self.test(self.model)
                 trainacc = epochscore/len(self.train_set)
-            print(f'epoch {self.epoch}:\ttestacc:{self.accuracy}\ttrainacc:{trainacc}\tloss:{loss}')
-            
-            if self.tb_writer is not None:
-                self.tb_writer.add_scalar('data/loss',runloss,self.epoch)
-                self.tb_writer.add_scalar('data/testacc',self.accuracy,self.epoch)
-                self.tb_writer.add_scalar('data/trainacc',trainacc,self.epoch)
+            print(f'epoch {self.global_epoch}/{self.epoch}:\ttestacc:{self.accuracy}\ttrainacc:{trainacc}\tloss:{runloss}')
 
+            #if self.tb_writer is not None:
+            writer.add_scalar(f'data/node_{self.name}/loss',runloss,self.global_epoch)
+            writer.add_scalar(f'data/node_{self.name}/testacc',self.accuracy,self.global_epoch)
+            writer.add_scalar(f'data/node_{self.name}/trainacc',trainacc,self.global_epoch)
+                              
             self.epoch+=1
+            self.global_epoch+=1
 
     def test(self,num_batches = None):       
         ''' Tests the accuracy of the dp model on testset ''' 
@@ -143,9 +167,71 @@ class dp_model():
             num_workers=2
         )
 
-class dl_node():
+class dl_node(fl.client.NumPyClient):
     '''
     Simulation object representing a distributed learning node
+
+    Implements a mobilenetv2 on CIFAR10 by default.
+
+    This inherits from flower client for federated learning.
     '''
-    def __init__(self):
-        self.dp_model = None
+    def __init__(self, name='default_name'):
+        self.dp_model = dp_model()
+        self.net = self.dp_model.model
+        self.dp_model.name = name
+        self.name = name
+        self.energy = 500
+        self.round = 0
+
+    def get_parameters(self, config):
+        '''
+        Returns the parameters of the local net
+        '''
+        return [val.cpu().numpy() for _, val in self.net.state_dict().items()]
+
+    def set_parameters(self, parameters: List[np.ndarray]):
+        '''
+        Sets the local net's parameters to the parameters given
+        '''
+        params_dict = zip(self.net.state_dict().keys(), parameters)
+        state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
+        self.dp_model.model.load_state_dict(state_dict, strict=True)
+
+    def fit(self, parameters, config):
+        self.set_parameters(parameters)
+        
+        self.dp_model.sup_train()
+
+        accuracy = self.dp_model.test()
+
+        #decrement energy based on number of epochs performed this round; 1 energy per epoch
+        self.energy-=self.dp_model.learning_epochs
+        #decrement 20 energy just for sending things
+        self.energy-=20
+        writer.add_scalar(f'data/node_{self.name}/energy',self.energy,self.round)
+        self.round+=1
+        print(f'Node {self.name}\tenergy: {self.energy}\tlocal round: {self.round}')
+
+        self.save_node()
+        return self.get_parameters(self.net), len(self.dp_model.train_loader), {"accuracy": accuracy}
+    
+    def save_node(self):
+        '''
+        Saves node data to the node state directory
+        '''
+        # Cannot pickle a tensorboard writer
+        self.dp_model.tb_writer = None
+
+        path = f'node_states/node_{self.name}.nd'
+        with open(path,'wb') as handle: 
+            pickle.dump(self, handle)
+        print(f'Dumped {self} information in {path}')
+
+    @classmethod
+    def load_node(cls,name: str):
+        '''
+        Loads node data to the node state directory
+        '''
+        path = f'node_states/node_{name}.nd'
+        with open(path,'rb') as handle:
+            return pickle.load(handle)
