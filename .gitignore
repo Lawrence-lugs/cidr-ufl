@@ -1,3 +1,7 @@
 data/*
 saved_runs/*
-__pycache__/*
+*__pycache__*
+runs/*
+node_states/*
+saved_nodes/*
+tb_data/*
