@@ -240,7 +240,7 @@ class toycar_dataset(Dataset):
 
             block_idx = wav_idx // BLOCKSIZE
             if self.block != block_idx:
-                print(f'Getting Trainset Block {block_idx}...')
+                # print(f'Getting Trainset Block {block_idx}...')
                 self.protoset = get_wav_dataset(root=self._root,set=self.set,start = block_idx*BLOCKSIZE, end = (block_idx+1)*BLOCKSIZE, use_tqdm=False, files = self.files)
                 self.block = block_idx
             data = self.protoset[wav_idx % BLOCKSIZE]
@@ -257,7 +257,7 @@ class toycar_dataset(Dataset):
 
             block_idx = idx // BLOCKSIZE
             if self.block != block_idx:
-                print(f'Getting Testset Block {block_idx}...')
+                # print(f'Getting Testset Block {block_idx}...')
                 self.protoset = get_wav_dataset(root=self._root,set=self.set,start = block_idx*BLOCKSIZE, end = (block_idx+1)*BLOCKSIZE, use_tqdm=False, files = self.files)
                 self.block = block_idx
             wav, lbl = self.protoset[idx % BLOCKSIZE]

@@ -13,7 +13,6 @@ def tqdm(thing, **kwargs):
 
 class ad_model(dl_framework.node.dp_model):
     def __init__(self, fw_config, name='default_ad_node'):
-        self.fw_config = fw_config
         self.device = fw_config.get_device()
         self.writer = fw_config.get_writer
 
@@ -50,7 +49,7 @@ class ad_model(dl_framework.node.dp_model):
             self.epoch += 1
             self.global_epoch += 1
 
-            auc, _, _, _ = self.test(500)
+            auc, _, _, _ = self.test(test_set = self.eval_set)
 
             self.writer().add_scalar(f'data/node_{self.name}/loss',runloss,self.global_epoch)
             self.writer().add_scalar(f'data/node_{self.name}/auc',auc,self.global_epoch)
@@ -60,30 +59,7 @@ class ad_model(dl_framework.node.dp_model):
         auc, fpr, tpr, _ = self.test()
         print(f'[Node:{self.name}]\t EndofRound:{self.global_epoch}/{self.epoch}\tloss:{runloss}\tauc:{auc}')
 
-
-    def eval(self,num_elem = 500):       
-        ''' Tests for ROC & AUC ''' 
-
-        from sklearn.metrics import roc_curve,roc_auc_score
-        mses = []
-        lbls = []
-        self.model.eval()
-        for input,label in tqdm(self.eval_set,desc='Eval'):
-            input = input.to(self.device)
-            avgmse = 0
-            outputs = self.model(input)
-            avgmse += self.criterion(outputs,input)
-            avgmse /= input.shape[0]
-            mses.append(avgmse)
-            lbls.append(label)
-        mses = [i.detach().cpu() for i in mses]
-        lbls = [not i for i in lbls]
-        fpr,tpr,thresholds = roc_curve(lbls,mses)
-        auc = roc_auc_score(lbls,mses)
-        self.plot_stats(lbls,mses,fpr,tpr,auc)
-        return auc, fpr, tpr
-    
-    def test(self,num_batches = None, plot_roc = False, test_set = None):       
+    def test(self, plot_roc = False, test_set = None):       
         ''' Tests for ROC & AUC ''' 
 
         from sklearn.metrics import roc_curve,roc_auc_score
@@ -91,9 +67,10 @@ class ad_model(dl_framework.node.dp_model):
         import numpy as np
 
         if test_set is None:
+            # print('Setting test_set to full size')
             test_set = self.test_set
 
-        print(f'Size of test set: {len(test_set)}. Testing...')
+        # print(f'Size of test set: {len(test_set)}. Testing...')
 
         mses = []
         lbls = []
@@ -118,27 +95,29 @@ class ad_model(dl_framework.node.dp_model):
         return auc, fpr, tpr, loss
 
 
-    def load_loaders(self, train_batch = 8192, test_batch = 16, train_workers = 4, test_workers = 2):
-        
-        if self.fw_config.federated:
-            print('Setting dataloader workers to 1 for federated learning')
-            train_workers = 1
-            test_workers = 1
+    def load_loaders(self, train_batch = 8192, test_batch = 16, train_workers = 1, test_workers = 1):
         
         self.train_loader = torch.utils.data.DataLoader(
             self.train_set,
             batch_size=train_batch,
             num_workers=train_workers
         )
-        # self.test_loader = torch.utils.data.DataLoader(
-        #     self.test_set,
-        #     batch_size=test_batch,
-        #     num_workers=test_workers
-        # )        
-        # from numpy.random import randint
-        # indices = randint(len(self.test_set),size=500)
-        # self.eval_set = torch.utils.data.Subset(self.test_set,indices)
+        self.test_loader = torch.utils.data.DataLoader(
+            self.test_set,
+            batch_size=test_batch,
+            num_workers=test_workers
+        )        
+        from numpy.random import randint
+        indices = randint(len(self.test_set),size=500)
+        
+        file_subset = []
+        for idx in indices:
+            file_subset.append(self.test_set.files[idx])
 
+        from copy import deepcopy
+        self.eval_set = deepcopy(self.test_set)
+        self.eval_set.files = file_subset
+        print(f'Eval set length: {len(self.eval_set)}')
 
     def plot_stats(self,lbls,mses,fpr,tpr,auc):
         from sklearn.metrics import roc_curve,roc_auc_score
@@ -184,9 +163,22 @@ class toycar_ad_node(dl_framework.node.dl_node):
         print(f"[Node {self.name}] evaluate, config: {config}")
         self.set_parameters(parameters)
         auc, fpr, tpr, loss = self.dp_model.test()
-        return float(loss), len(self.dp_model.test_loader), {"accuracy": float(auc)}
+        return float(loss), len(self.dp_model.test_set), {"accuracy": float(auc)}
+    
+    def _energy_handler(func):
+        def wrapper(self,*args,**kwargs):
+            rx_energy = 0
+            tx_energy = 0
+            if func.__name__ == 'fit':
+                self.energy -= rx_energy
+                self.energy -= self.dp_model.learning_epochs
+                res = func(self,*args,**kwargs)
+                self.energy -= tx_energy
+                return res
+        return wrapper
 
     # Redefine Fit
+    @_energy_handler
     def fit(self, parameters, config):
         self.set_parameters(parameters)
         

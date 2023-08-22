@@ -23,11 +23,17 @@ class fw_config(object):
         self.federated = True
         self.node_class = None
 
+        self.announced = False
+
     def get_writer(self):
 
         from torch.utils.tensorboard import SummaryWriter
         writer = SummaryWriter(f'{self.tensorboard_runs_dir}/{self.run_name}_{self.run_hash}')
-        # print(f'Find the tensorboard run data in : {self.tensorboard_runs_dir}/{self.run_name}_{self.run_hash}')
+        
+        if self.announced is False:
+            self.announced = True
+            print(f'Find the tensorboard run data in : {self.tensorboard_runs_dir}/{self.run_name}_{self.run_hash}')
+        
         return writer
 
     def get_device(self):

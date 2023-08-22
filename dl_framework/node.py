@@ -1,3 +1,4 @@
+#%%
 
 import torch
 import torchvision
@@ -16,7 +17,7 @@ class dp_model():
     def __init__(self, fw_config):
 
         self.device = fw_config.get_device()
-        self.writer = fw_config.get_writer()
+        self.writer = fw_config.get_writer
 
         self.model = image_classification.mbv2.KL_MBV2().to(self.device)
 
@@ -84,9 +85,9 @@ class dp_model():
             print(f'[Node:{self.name}]\t epoch:{self.global_epoch}/{self.epoch}:\ttestacc:{accuracy}\ttrainacc:{trainacc}\tloss:{runloss}')
 
             #if self.tb_writer is not None:
-            self.writer.add_scalar(f'data/node_{self.name}/loss',runloss,self.global_epoch)
-            self.writer.add_scalar(f'data/node_{self.name}/testacc',accuracy,self.global_epoch)
-            self.writer.add_scalar(f'data/node_{self.name}/trainacc',trainacc,self.global_epoch)
+            self.writer().add_scalar(f'data/node_{self.name}/loss',runloss,self.global_epoch)
+            self.writer().add_scalar(f'data/node_{self.name}/testacc',accuracy,self.global_epoch)
+            self.writer().add_scalar(f'data/node_{self.name}/trainacc',trainacc,self.global_epoch)
                               
             self.epoch+=1
             self.global_epoch+=1
@@ -94,6 +95,7 @@ class dp_model():
     def test(self,num_batches = None):       
         ''' Tests the accuracy of the dp model on testset ''' 
         model = self.model.to(self.device)
+        model.eval()
         if num_batches is None:
             num_batches = len(self.test_loader)
         loss = 0
@@ -128,8 +130,10 @@ class dl_node(fl.client.NumPyClient):
 
     This inherits from flower client for federated learning.
     '''
-    def __init__(self, name='default_name'):
-        self.dp_model = dp_model()
+    def __init__(self, fw_config, name='default_name'):
+        self.device = fw_config.get_device()
+        self.writer = fw_config.get_writer
+        self.dp_model = dp_model(fw_config)
         self.net = self.dp_model.model
         self.dp_model.name = name
         self.name = name
@@ -161,7 +165,7 @@ class dl_node(fl.client.NumPyClient):
         self.energy-=self.dp_model.learning_epochs
         #decrement 20 energy just for sending things
         self.energy-=20
-        self.writer.add_scalar(f'data/node_{self.name}/energy',self.energy,self.round)
+        self.writer().add_scalar(f'data/node_{self.name}/energy',self.energy,self.round)
         self.round+=1
         print(f'[Node {self.name}]\tenergy: {self.energy}\tlocal round: {self.round}')
 
@@ -192,3 +196,12 @@ class dl_node(fl.client.NumPyClient):
         path = f'node_states/node_{name}.nd'
         with open(path,'rb') as handle:
             return pickle.load(handle)
+        
+if __name__ == '__main__':
+    from dl_framework import fw_config
+    
+    my_config = fw_config()
+    node = dl_node(my_config)
+
+    node.dp_model.sup_train()
+
