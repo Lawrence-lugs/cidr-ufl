@@ -1,8 +1,8 @@
 # CIDR Distributed Learning Framework
 
-Under the CIDR P3 project, this framework is being built to quickly perform experiments on TinyML algorithms for distributed learning applications.
+Under the CIDR P3 project, this framework is being built to quickly perform experiments on efficient ML algorithms for distributed learning applications.
 
-As of the moment, it only has support for Visual Wakewords and CIFAR10 from the MLPerfTiny benchmark datasets. However, it should have support for all datasets should you be able to pack them as a Pytorch dataset.
+We have sample support for 
 
 ![Alt text](image.png)
 

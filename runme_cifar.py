@@ -4,7 +4,7 @@ import dl_framework
 
 my_config = dl_framework.fw_config()
 
-my_config.tensorboard_runs_dir = 'tb_data/refactoring_runs'
+my_config.tensorboard_runs_dir = 'tb_data/cifar_many_nodes'
 my_config.run_name = 'fed_ic'
 
 # Federated Simulation Settings 
