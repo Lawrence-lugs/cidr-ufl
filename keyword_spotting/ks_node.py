@@ -25,20 +25,19 @@ class ks_model(dl_framework.node.dp_model):
     def __init__(self, fw_config):
         super().__init__(fw_config)
 
-        # self.optimizer = torch.optim.SGD(
-        #     self.model.parameters(),
-        #     lr=0.002,
-        #     momentum=0.9,
-        #     weight_decay=12e-4 #weight decay is huge for this
-        # )
-
-        self.optimizer = torch.optim.Adam(
+        self.optimizer = torch.optim.SGD(
             self.model.parameters(),
-            lr = 0.0005,
+            lr=0.001,
             weight_decay=1e-4
         )
 
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer,_set_lr,-1)
+        # self.optimizer = torch.optim.Adam(
+        #     self.model.parameters(),
+        #     lr = 0.0005,
+        #     weight_decay=1e-4
+        # )
+
+        # self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer,_set_lr,-1)
 
     # Must redefine workers to be 0, bug of tensorflow dataset
     def load_loaders(self, train_batch = 16, test_batch = 16):
@@ -84,14 +83,14 @@ class ks_model(dl_framework.node.dp_model):
             with torch.no_grad():
                 _,accuracy = self.test(self.model)
                 trainacc = epochscore/len(self.train_set)
-            print(f'[Node:{self.name}]\t epoch:{self.global_epoch}/{self.epoch}:\ttestacc:{accuracy}\ttrainacc:{trainacc}\tloss:{runloss}\t lr:{self.scheduler.get_lr()}')
+            print(f'[Node:{self.name}]\t epoch:{self.global_epoch}/{self.epoch}:\ttestacc:{accuracy}\ttrainacc:{trainacc}\tloss:{runloss}\t')#lr:{self.scheduler.get_lr()}')
 
             #if self.tb_writer is not None:
             self.writer().add_scalar(f'data/node_{self.name}/loss',runloss,self.global_epoch)
             self.writer().add_scalar(f'data/node_{self.name}/testacc',accuracy,self.global_epoch)
             self.writer().add_scalar(f'data/node_{self.name}/trainacc',trainacc,self.global_epoch)
                               
-            self.scheduler.step()
+            # self.scheduler.step()
             self.epoch+=1
             self.global_epoch+=1
 

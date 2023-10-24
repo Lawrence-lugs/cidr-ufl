@@ -1,62 +1,66 @@
 import dl_framework
 
+nums = [10]
+
 # Name the Run
 
-my_config = dl_framework.fw_config()
+for i in nums:
 
-my_config.tensorboard_runs_dir = 'tb_data/cifar_many_nodes'
-my_config.run_name = 'fed_ic'
+    my_config = dl_framework.fw_config()
 
-# Federated Simulation Settings 
-# my_config.resume = False
-my_config.clients_per_gpu = 1
-my_config.num_nodes = 10
-my_config.local_epochs = 10
-my_config.federated = True
-my_config.num_rounds = 10
+    my_config.tensorboard_runs_dir = 'tb_data/cifar_210nodes_resnet'
+    my_config.run_name = f'fed_ic_{i}'
 
-# Set Node Class
+    # Federated Simulation Settings 
+    # my_config.resume = False
+    my_config.clients_per_gpu = 1
+    my_config.num_nodes = i
+    my_config.local_epochs = 10
+    my_config.federated = True
+    my_config.num_rounds = 10
 
-import dl_framework.node
-my_config.node_class = dl_framework.node.dl_node
+    # Set Node Class
 
-# Make Local Datasets
-import torch
-print(torch.__version__)
-def split_dataset(trainset: torch.utils.data.dataset.Dataset,num_nodes: int):
+    import image_classification.ic_node
+    my_config.node_class = image_classification.ic_node.ic_node
 
-    torchseed = torch.Generator().manual_seed(42)
-    dataset_shares = [1 / num_nodes] * num_nodes
+    # Make Local Datasets
+    import torch
+    print(torch.__version__)
+    def split_dataset(trainset: torch.utils.data.dataset.Dataset,num_nodes: int):
 
-    import numpy as np
-    print(np.sum(dataset_shares))
+        torchseed = torch.Generator().manual_seed(42)
+        dataset_shares = [1 / num_nodes] * num_nodes
 
-    local_trainsets = torch.utils.data.random_split(trainset, dataset_shares, torchseed)
+        import numpy as np
+        print(np.sum(dataset_shares))
 
-    return local_trainsets 
+        local_trainsets = torch.utils.data.random_split(trainset, dataset_shares, torchseed)
 
-import torchvision
-import image_classification.utils
-trainset = torchvision.datasets.CIFAR10(
-        root='data',
-        train=True,
-        download=False,
-        transform=image_classification.utils.t_cropflip_augment
-    )
-trainsets = split_dataset(trainset,my_config.num_nodes)
-trainset = None
-testset = torchvision.datasets.CIFAR10(
-        root='data',
-        train=False,
-        download=False,
-        transform=image_classification.utils.t_normalize
-    )
+        return local_trainsets 
 
-my_config.testset = testset
-my_config.trainsets = trainsets
+    import torchvision
+    import image_classification.utils
+    trainset = torchvision.datasets.CIFAR10(
+            root='data',
+            train=True,
+            download=False,
+            transform=image_classification.utils.t_cropflip_augment
+        )
+    trainsets = split_dataset(trainset,my_config.num_nodes)
+    trainset = None
+    testset = torchvision.datasets.CIFAR10(
+            root='data',
+            train=False,
+            download=False,
+            transform=image_classification.utils.t_normalize
+        )
 
-import dl_framework.framework as framework
-framework.run(my_config)
+    my_config.testset = testset
+    my_config.trainsets = trainsets
+
+    import dl_framework.framework as framework
+    framework.run(my_config)
 
 
 

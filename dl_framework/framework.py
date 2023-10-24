@@ -43,12 +43,17 @@ def run(fw_config):
         
         client_resources = {"num_gpus": gpus_per_client}
 
-        strategy = fl.server.strategy.FedAvg(
+        from fed_opt.momentum_fed_avg import MomFedAvg
+        FedAvg = fl.server.strategy.FedAvg
+        strat = MomFedAvg
+
+        strategy = strat(
             fraction_fit=1.0,  # Sample 100% of available clients for training
             fraction_evaluate=0.5,  # Sample 50% of available clients for evaluation
             min_fit_clients=2,  # Never sample less than 10 clients for training
             min_evaluate_clients=5,  # Never sample less than 5 clients for evaluation
             min_available_clients=2,  # Wait until all 10 clients are available
+            momentum = 0.9
             )
         
         client_func = functools.partial(dp_node_creator,fw_config = fw_config)

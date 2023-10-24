@@ -18,11 +18,12 @@ class ad_model(dl_framework.node.dp_model):
 
         self.model = fc_ae.FC_AE().to(self.device)
 
-        self.optimizer = torch.optim.Adam(self.model.parameters(),lr=0.001)
+        # self.optimizer = torch.optim.Adam(self.model.parameters(),lr=0.001)
+        self.optimizer = torch.optim.SGD(self.model.parameters(),lr=0.01,weight_decay=1e-4)
 
         self.criterion = torch.nn.MSELoss()
         
-        self.learning_epochs = 100
+        self.learning_epochs = 500
         self.epoch = 0
         self.global_epoch = 0
         self.name = name
@@ -124,9 +125,22 @@ class ad_model(dl_framework.node.dp_model):
         import matplotlib.pyplot as plt
         import io, PIL
         from torchvision.transforms import ToTensor
+        import numpy as np
 
         anoms = [val for i,val in enumerate(mses) if lbls[i] == 1]
         norms = [val for i,val in enumerate(mses) if lbls[i] == 0]
+
+        anoms_mean = np.array(anoms).mean()
+        norms_mean = np.array(norms).mean()
+        anom_percentile_interval = (np.percentile(np.array(anoms),97.5),np.percentile(np.array(anoms),2.5))
+        norm_percentile_interval = (np.percentile(np.array(norms),97.5),np.percentile(np.array(norms),2.5))        
+
+        self.writer().add_scalar(f'data/node_{self.name}/mean_anomaly_mse',anoms_mean,self.global_epoch)
+        self.writer().add_scalar(f'data/node_{self.name}/mean_normal_mse',norms_mean,self.global_epoch)
+        self.writer().add_scalar(f'data/node_{self.name}/anom_pi_high',anom_percentile_interval[0],self.global_epoch)
+        self.writer().add_scalar(f'data/node_{self.name}/anom_pi_low',anom_percentile_interval[1],self.global_epoch)
+        self.writer().add_scalar(f'data/node_{self.name}/norm_pi_high',norm_percentile_interval[0],self.global_epoch)
+        self.writer().add_scalar(f'data/node_{self.name}/norm_pi_low',norm_percentile_interval[1],self.global_epoch)
 
         plt.figure(figsize=(9,4))
         plt.subplot(1,2,1)
@@ -199,10 +213,16 @@ class toycar_ad_node(dl_framework.node.dl_node):
 
 
 if __name__ == '__main__':
-    my_node = toycar_ad_node()
+    from dl_framework import fw_config    
+    my_config = fw_config()
+    my_config.tensorboard_runs_dir = 'tb_data/ad_node_sgd'
+    my_config.run_name = 'sgd_run'
+
+    my_node = toycar_ad_node(my_config)
     my_node.dp_model.test_set = toycar_dset.toycar_dataset(set='test',type='wav')
     my_node.dp_model.train_set = toycar_dset.toycar_dataset(set='train',type='wav')
     my_node.dp_model.load_loaders()
     my_node.dp_model.sup_train()
+
 
 # %%

@@ -47,6 +47,7 @@ class dp_model():
         
         self.learning_epochs = 150
         self.epoch = 0
+        self.scheduler = None
 
         self.global_epoch = 0
         
@@ -89,6 +90,9 @@ class dp_model():
             self.writer().add_scalar(f'data/node_{self.name}/testacc',accuracy,self.global_epoch)
             self.writer().add_scalar(f'data/node_{self.name}/trainacc',trainacc,self.global_epoch)
                               
+            if self.scheduler is not None:
+                self.scheduler.step()
+
             self.epoch+=1
             self.global_epoch+=1
 

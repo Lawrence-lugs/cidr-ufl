@@ -10,7 +10,7 @@ my_config.run_name = 'fed_ks'
 # Federated Simulation Settings 
 # my_config.resume = False
 my_config.clients_per_gpu = 1
-my_config.num_nodes = 10
+my_config.num_nodes = 30
 my_config.local_epochs = 8
 my_config.federated = True
 my_config.num_rounds = 8
