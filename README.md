@@ -1,95 +1,37 @@
-# CIDR Distributed Learning Framework
+# CIDR Distributed Learning Framework (a.k.a. WSN-DL)
 
-Under the CIDR P3 project, this framework is being built to quickly perform experiments on efficient ML algorithms for distributed learning applications.
+Under the CIDR P3 project, this framework was built to quickly perform experiments on efficient ML algorithms for distributed learning applications.
 
-We have sample support for 
+We built this framework with examples for the 4 MLPerfTiny tasks as outlined in the table below.
 
-![Alt text](image.png)
+| Task                                         	| MLPerfTiny Prescribed  Model                             	| MLPerfTiny Target Performance 	| Single-node performance with  default hyperparameters 	|
+|----------------------------------------------	|----------------------------------------------------------	|-------------------------------	|-------------------------------------------	|
+| Visual Wakewords                             	| MobileNet (v1)                                           	| 0.80 (top-1)                  	| 0.91                                      	|
+| Keyword Spotting (Hello Edge Ver.)           	| DS-CNN (Hello Edge)                                      	| 0.90 (top-1)                  	| 0.94                                      	|
+| Image Classification (CIFAR-10)              	| 3-Block ResNet                                           	| 0.85 (top-1)                  	| 0.87                                      	|
+| Anomaly Detection (DCASE 2020 Task 2 ToyCar) 	| Fully-connected Autoencoder (DCASE 2020 Task 2 Baseline) 	| 0.85 (AUC)                    	| 0.89                                      	|
+
+Current version has support for:
+
+1. Centralized training (like normal, as opposed to federated training) for all MLPerfTiny tasks. See `solo_train_scripts`.
+2. Federated training (see `runme_<task>.py` files) for all MLPerfTiny tasks.
+3. Simple notebook demonstrating how the project is used and how to setup the config file (`federated_demo.ipynb`). This should work in google colab, albeit very slowly.
+
+## Models in this repository
+
+![Alt text](figures/image-4.png)
 
 ## Getting started
 
-To use the framework, instantiate an ML model:
+To use the framework, follow the instructions in the `federated_demo.ipynb` notebook. 
 
-```python
-import cidr_node
-
-my_model = cidr_node.dp_model()
-```
-
-By default, this instantiates a mobilenetv2 model with a fully-connected layer as its classifier with the CIFAR10 dataset.
-
-To run supervised training, do
-
-```python
-my_model.sup_train()
-```
-
-To test the model on the current lodaded , do
-
-```python
-my_model.test()
-```
-
-To quantize the model using post-training quantization, do
-
-```python
-my_model.quantize()
-```
-
-## Visual Wakewords
-
-An example of using the framework to run model training on visual wakewords in provided in `main_quantize.py`
-
-## Replacing parts of the model
+## Replacing parts of model
 
 `dp_model.model` is a Pytorch model object- simply replace it with another Pytorch model (i.e. the one that can call model.forward())
 
 To change the training environment and hyperparameters, the `optimizer, criterion, scheduler, learning_epochs` attributes of the `dp_model` object can be replaced, as per their Pytorch values.
 
 To change the dataset, simply (1) replace the `train_set` and `test_set` attributes of `dp_model` with your desired Pytorch dataset object (must be of type TorchDataset) and (2) run `dp_model.load_loaders()`
-
-## Distributed Learning
-
-The cidr-ufl framework simulates distributed learning using Flower as a backend. To run a sample federated simulation on CIFAR10, run
-
-```
-python federated_module.py
-```
-
-This simulation may take very long for high numbers of clients. To change the number of clients, edit the file `config.py` from which all other code files take global parameters.
-
-To edit the AI model or anything about the node, create a new node inheriting from the parent `dl_node` class like follows:
-
-```python
-# Borrow global GPU/CPU from config.py
-import config
-device = config.device
-
-class my_node(dl_node):
-
-    # You just need to redefine __init__; 
-    # Everything else is inherited from dl_node
-
-    def __init__(self):
-        self.dp_model = cidr_node.dp_model()
-        self.dp_model.model = <some_pytorch_model>.to(device) 
-
-        # must set optimizer to target new model
-        self.dp_model.optimizer = <some_pytorch_optimizer>(
-            self.dp_model.model.parameters()
-        )
-
-        self.dp_model.train_set = <some_torch_dataset>
-        self.dp_model.test_set = <some_torch_dataset>
-
-        # create dataloaders from the datasets
-        self.dp_model.load_loaders
-
-node = my_node()
-my_node.train()
-```
-
-Do not just change the model of an existing node, since `Flower`'s `client_fn` has trouble keeping track of the model changes.
 
 ## Anomaly Detection Dataset
 
@@ -114,4 +56,33 @@ from anomaly_detection import toycar
 train_set = toycar.get_trainset()
 test_set = toycar.get_testset()
 ```
+
+## Framework Operation
+
+In the framework, nodes can be designed by inheriting from a base class
+`dp_node`. This class contains a `dp_model` object, which contains the AI model itself, its
+training and evaluation set, and other miscellaneous parameters. Basically, to create a
+new node, you must instantiate a `dp_node` object. To replace the AI model inside, you
+must create and instantiate a new `dp_model`.
+
+![Alt text](figures/image-2.png)(Figure 1. Structure of a node from the WSN-DL Framework)
+
+In the CIDR DL framework, the main function initializes the simulation and
+spawns both the server and the nodes. The nodes each contain its own local data
+subset to sample from, and an ML model to train.
+
+![Alt text](figures/image-1.png)(Figure 2. WSN-DL Framework Operation)
+
+The server periodically requests a subset of the nodes to send their parameters
+(**trained parameters** on Figure 2) using the `get_parameters` function from Figure 1.
+When the server does this is entirely dependent on the currently implemented
+server-side algorithm. In our sample implementation, the server-side algorithm is
+FedAvg. In FedAvg, the nodes send their parameters every L training epochs, known as
+the “local epochs”. This does not mean that the nodes need to finish all their epochs at
+the same time. Rather, the only valid nodes for a parameter sampling round will be ones
+that have finished all of the epochs.
+
+After the server obtains the parameters, it aggregates the parameters according
+to the server-side algorithm, then it sends it back to all the nodes (averaged parameters
+in Figure 2) using the set_parameters function of the node in Figure 1.
 

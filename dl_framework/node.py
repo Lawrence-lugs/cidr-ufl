@@ -45,7 +45,7 @@ class dp_model():
         )
         self.load_loaders()
         
-        self.learning_epochs = 150
+        self.learning_epochs = 100
         self.epoch = 0
         self.scheduler = None
 

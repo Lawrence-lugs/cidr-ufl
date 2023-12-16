@@ -75,6 +75,11 @@ def run(fw_config):
         node.trainset = fw_config.trainsets[0]
         node.testset = fw_config.testset
         node.sup_train()
+
+        if fw_config.savename is not None:
+            import torch.save
+            torch.save(node.dp_model.model,fw_config.savename)
+
         return node
 
 # %%

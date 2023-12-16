@@ -23,6 +23,9 @@ class fw_config(object):
         self.federated = True
         self.node_class = None
 
+        # None if don't want to save
+        self.savename = None
+
         self.announced = False
 
     def get_writer(self):

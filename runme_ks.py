@@ -40,8 +40,9 @@ trainsets = split_dataset(trainset,num_nodes=my_config.num_nodes)
 my_config.testset = testset
 my_config.trainsets = trainsets
 
+my_config.savename = "final_models/ks_final"
+
 import dl_framework.framework as framework
 framework.run(my_config)
-
 
 
