@@ -9,13 +9,13 @@ import image_classification, torchvision
 trainset = torchvision.datasets.CIFAR10(
         root='data',
         train=True,
-        download=False,
+        download=True,
         transform=image_classification.utils.t_cropflip_augment
     )
 testset = torchvision.datasets.CIFAR10(
         root='data',
         train=False,
-        download=False,
+        download=True,
         transform=image_classification.utils.t_normalize
     )
 

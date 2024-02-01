@@ -21,6 +21,34 @@ Current version has support for:
 
 ![Alt text](figures/image-4.png)
 
+## Workspace Setup and Dependencies
+
+To install the setup and dependencies, make sure to download a conda distribution for your OS [here](https://conda.io/projects/conda/en/latest/user-guide/install/index.html). For faster dependency solving, I recommend the miniforge/mamba version which [can be downloaded here](https://github.com/conda-forge/miniforge).
+
+<details><summary> For setup in UP Microlab's RHEL PCs do these to install mamba/conda </summary>
+
+You must install miniforge3 (or conda) without the use of `sudo` or `root`. Here is how to do that:
+
+1. Go to [GitHub - conda-forge/miniforge: A conda-forge distribution.](https://github.com/conda-forge/miniforge#download)
+
+2. Copy the link of the linux x86 version (Right click Download Link > `Copy Link`)
+
+3. In your local terminal (tcsh in the ulab PCs) do `wget <linkhere>` to get the **miniforge** installer
+4. Do `bash Miniforge3-___-___` to install **miniforge.** Should take a few minutes.
+5. (4) Should have created a .bashrc file in your home folder (~). To be able to see pwd in this, add `PS1=’\w\$ ‘` as the first line of your .bashrc file.
+6. Open `bash`. This is because the default terminal of microlab is tcsh (do `echo $SHELL` to see),  but conda/mamba only works with bash.
+7. Do `mamba --version` to test mamba
+
+</details>
+
+After cloning this repository go into the directory `cd cidr-ufl`. 
+
+Then, do `conda env create -f wsn-dl.yml`. This will take a while.
+
+After the installation finishes, you should now have all the dependencies and can now try things from the `solo_train_scripts` folder. Note: **you need to have the datasets downloaded, so set `download=True` for `ic.py` so at least that works.**
+
+See below for instructions on downloading each dataset.
+
 ## Getting started
 
 To use the framework, follow the instructions in the `federated_demo.ipynb` notebook. 
@@ -56,6 +84,16 @@ from anomaly_detection import toycar
 train_set = toycar.get_trainset()
 test_set = toycar.get_testset()
 ```
+
+## Keyword Spotting Dataset
+
+The keyword spotting dataset used here is the `SPEECHCOMMANDS` dataset from `torchaudio.datasets`.
+
+Simply import that and set `download=True` to obtain a folder of the dataset, then set our code's path to that folder.
+
+## Visual Wakewords Dataset
+
+For VWW, you can use [`pyvww`](https://github.com/Mxbonn/visualwakewords) to download the MSCOCO dataset and turn it into the Visual Wake Words dataset. This will create a folder containing symbolic links to the correct images, which you can then set as path for our code.
 
 ## Framework Operation
 
